@@ -1,6 +1,8 @@
 # DATATYPE.wireless.SOUNDbase
 
 > 📑 **Soundbase importer** — reads a Soundbase frequency report exported as CSV and publishes its wireless channels, one record per frequency, on the APK.audio bus.
+>
+> 📚 **Wiki:** [Documentation/README.md](Documentation/README.md) — principles, architecture, delivery.
 
 ---
 
