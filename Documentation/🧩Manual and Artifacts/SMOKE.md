@@ -12,4 +12,4 @@ Is `DATATYPE.wireless.SOUNDbase` deployed? Written by `.apk.scripts/smoke.py` fr
 
 Re-run: `python3 .apk.scripts/smoke.py PODS/POD.THIN/Softapps/DATATYPE/DATATYPE.wireless.SOUNDbase`
 
-<!-- smoke:sig 60798aa4c846 since 2026-10-30 12:51 EDT -->
+<!-- smoke:sig ef68e22e1e3f since 2026-10-30 12:51 EDT -->
