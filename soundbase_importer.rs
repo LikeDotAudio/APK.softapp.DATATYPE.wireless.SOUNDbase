@@ -3,13 +3,14 @@
 //! Standalone Soundbase Importer module written in Rust.
 //! Parses Soundbase PDF exports / CSV data (e.g., SB PDF.csv),
 //! maps Group, Model, Band, Name, Preset, Spacing, Frequency fields,
-//! and publishes the result to the MQTT bus.
+//! and returns them. It does not publish: the data-migration daemon publishes the
+//! result on the broker it was started with (LOOSE-datatype-datatype-wireless).
 
 use csv::ReaderBuilder;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
-use apkaudio_contracts::topics::{self, MQTT_DEFAULT_PORT, MQTT_LOOPBACK_HOST};
+use apkaudio_contracts::topics;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SoundbaseChannel {
@@ -29,6 +30,8 @@ pub struct SoundbaseParseResult {
     pub file_path: String,
     pub mqtt_topic: String,
     pub total_channels: usize,
+    /// Rows the export carried that could not be read as a channel.
+    pub skipped_rows: usize,
     pub channels: Vec<SoundbaseChannel>,
 }
 
@@ -40,7 +43,7 @@ pub fn soundbase_mqtt_topic() -> String {
         .expect("Soundbase/ImportedData are literal segments the contract accepts")
 }
 
-/// Parses a Soundbase report / PDF CSV export directly into structured data and publishes to MQTT.
+/// Parses a Soundbase report / PDF CSV export into structured data. No side effect.
 pub fn parse_soundbase_report(file_path: impl AsRef<Path>) -> Result<SoundbaseParseResult, String> {
     let path = file_path.as_ref();
     let file_content = fs::read_to_string(path)
@@ -48,7 +51,7 @@ pub fn parse_soundbase_report(file_path: impl AsRef<Path>) -> Result<SoundbasePa
     parse_soundbase_report_str(&file_content, &path.to_string_lossy())
 }
 
-/// Parses a raw Soundbase CSV content string directly into structured data and publishes to MQTT.
+/// Parses a raw Soundbase CSV content string into structured data. No side effect.
 pub fn parse_soundbase_report_str(file_content: &str, source_name: &str) -> Result<SoundbaseParseResult, String> {
     let mut channels = Vec::new();
     let mut rdr = ReaderBuilder::new()
@@ -56,73 +59,61 @@ pub fn parse_soundbase_report_str(file_content: &str, source_name: &str) -> Resu
         .flexible(true)
         .from_reader(file_content.as_bytes());
 
+    let mut skipped_rows = 0usize;
     for record in rdr.records() {
-        if let Ok(rec) = record {
-            if rec.len() >= 7 {
-                let group = rec[0].trim().to_string();
-                let model = rec[1].trim().to_string();
-                let band = rec[2].trim().to_string();
-                let name = rec[3].trim().to_string();
-                let preset = rec[4].trim().to_string();
-                let spacing = rec[5].trim().to_string();
-                
-                if let Ok(freq) = rec[6].trim().parse::<f64>() {
-                    channels.push(SoundbaseChannel {
-                        group,
-                        model,
-                        band,
-                        name,
-                        preset,
-                        spacing,
-                        frequency_mhz: freq,
-                    });
-                }
-            }
+        let Ok(rec) = record else {
+            skipped_rows += 1;
+            continue;
+        };
+        if rec.iter().all(|f| f.trim().is_empty()) {
+            continue; // a blank line is not a dropped row
         }
+        let freq = if rec.len() >= 7 { rec[6].trim().parse::<f64>().ok() } else { None };
+        let Some(freq) = freq else {
+            skipped_rows += 1;
+            continue;
+        };
+        channels.push(SoundbaseChannel {
+            group: rec[0].trim().to_string(),
+            model: rec[1].trim().to_string(),
+            band: rec[2].trim().to_string(),
+            name: rec[3].trim().to_string(),
+            preset: rec[4].trim().to_string(),
+            spacing: rec[5].trim().to_string(),
+            frequency_mhz: freq,
+        });
     }
 
     let result = SoundbaseParseResult {
-        status: "success".to_string(),
+        status: status_for(channels.len()),
         source_format: "Soundbase_CSV_Report".to_string(),
         file_path: source_name.to_string(),
         mqtt_topic: soundbase_mqtt_topic(),
         total_channels: channels.len(),
+        skipped_rows,
         channels,
     };
-
-    if let Ok(json_payload) = serde_json::to_string_pretty(&result) {
-        publish_to_mqtt(&soundbase_mqtt_topic(), &json_payload);
-    }
 
     Ok(result)
 }
 
-pub fn publish_to_mqtt(topic: &str, payload: &str) {
-    use rumqttc::{Client, MqttOptions, Event, Packet, QoS};
-    use std::time::Duration;
+/// "success" only when the report yielded channels; a parse that found none is
+/// "empty", never a success the panel would draw as an imported, blank table.
+fn status_for(channels: usize) -> String {
+    if channels > 0 { "success" } else { "empty" }.to_string()
+}
 
-    let mut mqttoptions = MqttOptions::new("apkaudio-soundbase-importer", MQTT_LOOPBACK_HOST, MQTT_DEFAULT_PORT);
-    mqttoptions.set_keep_alive(Duration::from_secs(10));
-    if let Some((username, password)) = apkaudio_contracts::broker_auth::credentials() {
-        mqttoptions.set_credentials(username, password);
-    }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let (client, mut connection) = Client::new(mqttoptions, 10);
-    let _ = client.publish(topic, QoS::AtLeastOnce, true, payload.as_bytes());
-
-    let deadline = std::time::Instant::now() + Duration::from_secs(3);
-    let mut acked = false;
-    for notification in connection.iter() {
-        if let Ok(Event::Incoming(Packet::PubAck(_))) = notification {
-            println!("[SOUNDBASE MQTT PUBLISHER] Published & Acked by Broker ({MQTT_LOOPBACK_HOST}:{MQTT_DEFAULT_PORT}) Topic: '{}'", topic);
-            acked = true;
-            break;
-        }
-        if std::time::Instant::now() > deadline {
-            break;
-        }
-    }
-    if acked {
-        std::thread::sleep(Duration::from_millis(200));
+    #[test]
+    fn rows_without_a_frequency_are_counted_and_no_channels_is_empty() {
+        let csv = "Group,Model,Band,Name,Preset,Spacing,Frequency\nA,UR4D,G50,Vox,1,25,not-a-number\n,,,,,,\n";
+        let r = parse_soundbase_report_str(csv, "x").unwrap();
+        assert_eq!((r.status.as_str(), r.total_channels, r.skipped_rows), ("empty", 0, 1));
+        let ok = parse_soundbase_report_str(include_str!("test_data/SB PDF.csv"), "SB PDF.csv").unwrap();
+        assert!(ok.total_channels > 0);
+        assert_eq!(ok.status, "success");
     }
 }
