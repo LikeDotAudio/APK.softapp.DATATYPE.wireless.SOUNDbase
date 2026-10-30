@@ -7,7 +7,9 @@ use std::path::Path;
 mod soundbase_importer;
 
 fn main() {
-    let report_path = concat!(env!("CARGO_MANIFEST_DIR"), "/DataMigration/2_Soundbase/test_data/SB PDF.csv");
+    // The fixture lives beside this file, in DATATYPE.wireless.SOUNDbase/test_data — not under
+    // the DataMigration crate that compiles this runner.
+    let report_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../DATATYPE/DATATYPE.wireless.SOUNDbase/test_data/SB PDF.csv");
     println!("[Soundbase Test Runner] Testing standalone Soundbase Importer with file: {}", report_path);
 
     match soundbase_importer::parse_soundbase_report(Path::new(report_path)) {

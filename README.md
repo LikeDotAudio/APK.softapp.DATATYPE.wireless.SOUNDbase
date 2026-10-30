@@ -44,7 +44,7 @@ cd PODS/POD.THIN/Softapps/MANAGEMENT_AND_UTILITIES/MANAGEMENT.DataMigration
 cargo check --bins --lib          # compiles this parser and test_soundbase_importer
 ```
 
-`cargo run --bin test_soundbase_importer` parses the fixture **and publishes the result, retained, to the local broker** — it is not a dry run. Its fixture path is currently wrong — it names `$CARGO_MANIFEST_DIR/DataMigration/2_Soundbase/test_data/SB PDF.csv`, a layout the crate move left behind — so it exits 1 with `Failed to read file` before anything is published.
+`cargo run --bin test_soundbase_importer` parses the fixture **and publishes the result, retained, to the local broker** — it is not a dry run. It reads the fixture from `../../DATATYPE/DATATYPE.wireless.SOUNDbase/test_data/SB PDF.csv` (until 2026-10-30 it looked under the DataMigration crate, where the crate move left nothing, and exited 1).
 
 ---
 
