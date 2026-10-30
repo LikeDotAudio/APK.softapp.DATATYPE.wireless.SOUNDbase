@@ -35,3 +35,13 @@ cd PODS/POD.THIN/Softapps/MANAGEMENT_AND_UTILITIES/MANAGEMENT.DataMigration
 cargo check --bins --lib
 cargo test --bin test_soundbase_importer   # 4 unit tests
 ```
+
+## As a worker
+
+`SRC/src/lib.rs` `handle_job` decodes a job (`text` or `content_b64`), refuses one over
+`max_job_bytes` (8 MiB), runs `classify_soundbase_str` and returns `{job_id, tool, ok, result, error, elapsed_ms}`
+— always, so a caller waiting on a `job_id` is never left waiting. `run_job_agent` feeds it from
+`APK.audio/System/Protocols/wireless_soundbase/outgoing/job` and answers on `…/incoming/result`, neither
+retained. `apk-plugin-runner` adds the retained `incoming/api` description, the config, the will and
+the self test (`SRC/src/self_test.rs`: a probe file compiled into the binary runs through
+`handle_job`). The pod is `PODS/POD.workers`.

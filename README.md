@@ -15,7 +15,7 @@
 
 ## ⚙️ Repository Overview
 
-This repo holds source files, not a crate. They are compiled by somebody else:
+The parser is source compiled by somebody else; `SRC/` is the worker crate that runs it on its own:
 
 | File | What it is | Built by |
 | :-- | :-- | :-- |
@@ -24,6 +24,8 @@ This repo holds source files, not a crate. They are compiled by somebody else:
 | `test_data/SB PDF.pdf` | A Soundbase PDF report (20 frequencies) | — kept as the source of the CSV; nothing here reads PDF |
 | `test_data/SB PDF.csv` | The same report as CSV: `Group,Model,Band,Name,Preset,Spacing,Frequency` | the runner |
 | `display.json` | Launcher manifest (category `DATATYPE`) | the OS app tree (`OS/system/project-apps.json`) |
+| `SRC/` | The worker crate `apk-worker-wireless-soundbase`: `soundbase_importer.rs` (by `#[path]`) behind a job loop on `apk-plugin-runner`, with its `config.ini` (section `[wireless_soundbase]`) | `cargo test --manifest-path SRC/Cargo.toml`; the image `worker-wireless-soundbase:local` |
+| `Docker/` | The worker stack: container `Worker-WIRELESS_SOUNDBASE`, project `workers`, no port | included by `PODS/POD.workers/Docker/docker-compose.yml` |
 
 ### What the parser does (`soundbase_importer.rs`)
 
@@ -34,6 +36,21 @@ This repo holds source files, not a crate. They are compiled by somebody else:
 - Each channel record: `group`, `model`, `band`, `name`, `preset`, `spacing`, `frequency_mhz`. The GUI frame's table shows six of them (`name`, `group`, `model`, `band`, `frequency_mhz`, `spacing`).
 
 ---
+
+### As a worker (`Worker-WIRELESS_SOUNDBASE`, POD.workers)
+
+The same parser answers jobs on the bus (LOOSE-workers-convert-rest). A client subscribes to
+`APK.audio/System/Protocols/wireless_soundbase/incoming/result`, then publishes
+`{"job_id": "<yours>", "filename": "SB PDF.csv", ...}` to `APK.audio/System/Protocols/wireless_soundbase/outgoing/job`
+with the file as "text". The answer carries the same `job_id`, `ok`, and the parse result of
+`classify_soundbase_str` under `result`; a malformed job or one over `max_job_bytes` (8 MiB, `SRC/config.ini`) comes
+back `ok: false` with an `error`. Nothing is retained and the worker opens no port. Measured
+2026-10-30: the fixture `test_data/SB PDF.csv` sent as a job came back `ok: true` with 20 channels.
+
+```bash
+docker compose -f PODS/POD.workers/Docker/docker-compose.yml up -d --build wireless-soundbase
+cargo test --manifest-path SRC/Cargo.toml        # handle_job on the fixture, the self test
+```
 
 ## 🚀 Usage & Integration
 * **Web Portal Entry**: Data Migration → *Soundbase* (GUI frame `WEB.Frontend-Assets/SRC/FrontEnd/Gui_Frames/3_Data_Migration/2_Soundbase/Soundbase_Importer.json`). The frame publishes the chosen file on `APK.audio/System/DataMigration/Soundbase/FilePath` and draws the table from `.../Soundbase/ImportedData`.
