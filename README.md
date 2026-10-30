@@ -19,7 +19,7 @@ This repo holds source files, not a crate. They are compiled by somebody else:
 
 | File | What it is | Built by |
 | :-- | :-- | :-- |
-| `soundbase_importer.rs` | The CSV parser and its MQTT publisher | `#[path]` module `soundbase_importer` of the `apkaudio-data-migration` crate (`Softapps/MANAGEMENT_AND_UTILITIES/MANAGEMENT.DataMigration/mod.rs`), which `oaRustCore` re-exports as `data_migration` |
+| `soundbase_importer.rs` | The CSV parser (pure; it publishes nothing) | `#[path]` module `soundbase_importer` of the `apkaudio-data-migration` crate (`Softapps/MANAGEMENT_AND_UTILITIES/MANAGEMENT.DataMigration/mod.rs`), which `oaRustCore` re-exports as `data_migration` |
 | `test_soundbase_importer.rs` | A standalone runner over the fixture | `[[bin]] test_soundbase_importer` in that crate's `Cargo.toml` |
 | `test_data/SB PDF.pdf` | A Soundbase PDF report (20 frequencies) | — kept as the source of the CSV; nothing here reads PDF |
 | `test_data/SB PDF.csv` | The same report as CSV: `Group,Model,Band,Name,Preset,Spacing,Frequency` | the runner |
@@ -27,9 +27,10 @@ This repo holds source files, not a crate. They are compiled by somebody else:
 
 ### What the parser does (`soundbase_importer.rs`)
 
-- `parse_soundbase_report(path)` reads the file; `parse_soundbase_report_str(text, name)` parses text already in hand.
-- The CSV has a header row and is read **by column position**, not by header name: columns 0–6 are group, model, band, name, preset, spacing (kept as text) and frequency in MHz. A row with fewer than seven columns, or whose frequency does not parse as a number, is skipped.
-- The result (`SoundbaseParseResult`: `status`, `source_format` = `Soundbase_CSV_Report`, `file_path`, `mqtt_topic`, `total_channels`, `channels[]`) is published **retained, QoS 1** to `APK.audio/System/DataMigration/Soundbase/ImportedData` — built by `apkaudio_contracts::topics::data_migration("Soundbase", "ImportedData")`. It connects to the loopback broker (`MQTT_LOOPBACK_HOST`, `MQTT_DEFAULT_PORT`) with the credentials from `apkaudio_contracts::broker_auth`, waits up to 3 s for the ack, and returns the result either way.
+- `parse_soundbase_report(path)` reads the file; `parse_soundbase_report_str(text, name)` parses text already in hand. Both go through `classify_soundbase_str`, which has no side effect.
+- The CSV's header row is read **by name** (case-insensitive: `Group`, `Model`, `Band`, `Name`, `Preset`, `Spacing`, `Frequency` — also `Freq`, `MHz`), so reordered or extra columns map right. A header with no frequency column is an error; any other missing column leaves that field empty.
+- A row whose frequency does not parse, or falls outside 100–3000 MHz (the sibling importers' guard), is skipped and counted in `skipped_rows`; a blank line is not counted.
+- The result (`SoundbaseParseResult`: `status` — `success`, or `empty` when no channel was read — `source_format` = `Soundbase_CSV_Report`, `file_path`, `mqtt_topic`, `total_channels`, `skipped_rows`, `channels[]`) is returned. The data-migration daemon publishes it on its own broker to `APK.audio/System/DataMigration/Soundbase/ImportedData`, built by `apkaudio_contracts::topics::data_migration("Soundbase", "ImportedData")`.
 - Each channel record: `group`, `model`, `band`, `name`, `preset`, `spacing`, `frequency_mhz`. The GUI frame's table shows six of them (`name`, `group`, `model`, `band`, `frequency_mhz`, `spacing`).
 
 ---
@@ -44,9 +45,10 @@ This repo holds source files, not a crate. They are compiled by somebody else:
 ```bash
 cd PODS/POD.THIN/Softapps/MANAGEMENT_AND_UTILITIES/MANAGEMENT.DataMigration
 cargo check --bins --lib          # compiles this parser and test_soundbase_importer
+cargo test --bin test_soundbase_importer   # the parser's 4 unit tests
 ```
 
-`cargo run --bin test_soundbase_importer` parses the fixture **and publishes the result, retained, to the local broker** — it is not a dry run. It reads the fixture from `../../DATATYPE/DATATYPE.wireless.SOUNDbase/test_data/SB PDF.csv` (until 2026-10-30 it looked under the DataMigration crate, where the crate move left nothing, and exited 1).
+`cargo run --bin test_soundbase_importer` parses the fixture and prints it (20 channels); it publishes nothing. It reads the fixture from `../../DATATYPE/DATATYPE.wireless.SOUNDbase/test_data/SB PDF.csv` (until 2026-10-30 it looked under the DataMigration crate, where the crate move left nothing, and exited 1).
 
 ---
 
@@ -54,7 +56,7 @@ cargo check --bins --lib          # compiles this parser and test_soundbase_impo
 
 - **One record out, whatever came in.** Four foreign formats feed the Data Migration tab; each importer emits the fields its GUI frame declares as headers (the rule in the `MANAGEMENT.DataMigration/mod.rs` header). Here: `SoundbaseChannel` against `Soundbase_Importer.json`.
 - **Topics come from the contract.** `soundbase_mqtt_topic()` builds the topic with `apkaudio_contracts::topics::data_migration` rather than a literal.
-- **Publish and let go.** The parser publishes retained and returns; the bus holds the latest import for any tab that opens later. Nothing is stored in this repo.
+- **Parse, then let the daemon publish.** The parser returns; the data-migration daemon publishes retained on its own broker, and the bus holds the latest import for any tab that opens later. Nothing is stored in this repo.
 - **The PDF is the source, the CSV is what is parsed.** Soundbase's PDF is kept beside its CSV in `test_data/`; PDF reading belongs to `DATATYPE.wireless.PDF`, not here.
 
 ---

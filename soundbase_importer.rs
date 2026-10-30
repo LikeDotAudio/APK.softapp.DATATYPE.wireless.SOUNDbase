@@ -51,13 +51,63 @@ pub fn parse_soundbase_report(file_path: impl AsRef<Path>) -> Result<SoundbasePa
     parse_soundbase_report_str(&file_content, &path.to_string_lossy())
 }
 
-/// Parses a raw Soundbase CSV content string into structured data. No side effect.
+/// Parses a raw Soundbase CSV content string into structured data. No side effect
+/// (see `classify_soundbase_str`).
 pub fn parse_soundbase_report_str(file_content: &str, source_name: &str) -> Result<SoundbaseParseResult, String> {
+    classify_soundbase_str(file_content, source_name)
+}
+
+/// A usable wireless frequency, in MHz — the guard the IAS, WWB and CSV importers
+/// keep. A value outside it is a spacing, a channel number or a typo, not a carrier.
+fn usable_mhz(text: &str) -> Option<f64> {
+    text.trim().parse::<f64>().ok().filter(|f| *f > 100.0 && *f < 3000.0)
+}
+
+/// Where each field sits in this export, read from its header row by name, so a
+/// report whose columns are reordered (or carry an extra one) still maps right.
+struct Columns {
+    group: Option<usize>,
+    model: Option<usize>,
+    band: Option<usize>,
+    name: Option<usize>,
+    preset: Option<usize>,
+    spacing: Option<usize>,
+    frequency: usize,
+}
+
+impl Columns {
+    fn from_header(header: &csv::StringRecord) -> Result<Self, String> {
+        let names: Vec<String> = header.iter().map(|h| h.trim().to_ascii_lowercase()).collect();
+        let find = |wanted: &[&str]| names.iter().position(|n| wanted.contains(&n.as_str()));
+        let frequency = find(&["frequency", "frequency (mhz)", "freq", "freq (mhz)", "mhz"])
+            .ok_or_else(|| format!("no Frequency column in the header {:?}", names))?;
+        Ok(Columns {
+            group: find(&["group"]),
+            model: find(&["model"]),
+            band: find(&["band"]),
+            name: find(&["name"]),
+            preset: find(&["preset"]),
+            spacing: find(&["spacing"]),
+            frequency,
+        })
+    }
+}
+
+/// Classify raw Soundbase CSV content: header-mapped columns, frequencies held to
+/// 100–3000 MHz, every row that is not blank and not a channel counted in
+/// `skipped_rows`. Pure — it reads the string and returns; it publishes nothing.
+pub fn classify_soundbase_str(file_content: &str, source_name: &str) -> Result<SoundbaseParseResult, String> {
     let mut channels = Vec::new();
     let mut rdr = ReaderBuilder::new()
         .has_headers(true)
         .flexible(true)
         .from_reader(file_content.as_bytes());
+
+    let header = rdr.headers().map_err(|e| format!("Soundbase header unreadable: {}", e))?.clone();
+    let cols = Columns::from_header(&header)?;
+    let cell = |rec: &csv::StringRecord, at: Option<usize>| {
+        at.and_then(|i| rec.get(i)).map(|v| v.trim().to_string()).unwrap_or_default()
+    };
 
     let mut skipped_rows = 0usize;
     for record in rdr.records() {
@@ -68,23 +118,22 @@ pub fn parse_soundbase_report_str(file_content: &str, source_name: &str) -> Resu
         if rec.iter().all(|f| f.trim().is_empty()) {
             continue; // a blank line is not a dropped row
         }
-        let freq = if rec.len() >= 7 { rec[6].trim().parse::<f64>().ok() } else { None };
-        let Some(freq) = freq else {
+        let Some(freq) = rec.get(cols.frequency).and_then(usable_mhz) else {
             skipped_rows += 1;
             continue;
         };
         channels.push(SoundbaseChannel {
-            group: rec[0].trim().to_string(),
-            model: rec[1].trim().to_string(),
-            band: rec[2].trim().to_string(),
-            name: rec[3].trim().to_string(),
-            preset: rec[4].trim().to_string(),
-            spacing: rec[5].trim().to_string(),
+            group: cell(&rec, cols.group),
+            model: cell(&rec, cols.model),
+            band: cell(&rec, cols.band),
+            name: cell(&rec, cols.name),
+            preset: cell(&rec, cols.preset),
+            spacing: cell(&rec, cols.spacing),
             frequency_mhz: freq,
         });
     }
 
-    let result = SoundbaseParseResult {
+    Ok(SoundbaseParseResult {
         status: status_for(channels.len()),
         source_format: "Soundbase_CSV_Report".to_string(),
         file_path: source_name.to_string(),
@@ -92,9 +141,7 @@ pub fn parse_soundbase_report_str(file_content: &str, source_name: &str) -> Resu
         total_channels: channels.len(),
         skipped_rows,
         channels,
-    };
-
-    Ok(result)
+    })
 }
 
 /// "success" only when the report yielded channels; a parse that found none is
@@ -115,5 +162,27 @@ mod tests {
         let ok = parse_soundbase_report_str(include_str!("test_data/SB PDF.csv"), "SB PDF.csv").unwrap();
         assert!(ok.total_channels > 0);
         assert_eq!(ok.status, "success");
+        assert_eq!((ok.channels[0].band.as_str(), ok.channels[0].frequency_mhz), ("G57 - Narrowband", 566.6));
+    }
+
+    #[test]
+    fn columns_are_read_by_header_name_not_position() {
+        let csv = "Frequency,Name,Group,Extra,Band\n566.600,Vox,IEM,x,G57\n";
+        let r = classify_soundbase_str(csv, "x").unwrap();
+        let ch = &r.channels[0];
+        assert_eq!((ch.group.as_str(), ch.name.as_str(), ch.band.as_str(), ch.model.as_str()), ("IEM", "Vox", "G57", ""));
+        assert_eq!(ch.frequency_mhz, 566.6);
+    }
+
+    #[test]
+    fn a_frequency_outside_100_to_3000_mhz_is_skipped() {
+        let csv = "Group,Model,Band,Name,Preset,Spacing,Frequency\nA,M,B,N,1,0.5,0.925\nA,M,B,N,1,0.5,5800\nA,M,B,N,1,0.5,566.6\n";
+        let r = classify_soundbase_str(csv, "x").unwrap();
+        assert_eq!((r.total_channels, r.skipped_rows), (1, 2));
+    }
+
+    #[test]
+    fn a_report_with_no_frequency_column_is_an_error() {
+        assert!(classify_soundbase_str("Group,Model\nA,B\n", "x").is_err());
     }
 }

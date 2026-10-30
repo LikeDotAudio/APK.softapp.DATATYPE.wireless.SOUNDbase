@@ -11,6 +11,6 @@ No build of its own and no live URL. The importer ships compiled into the orches
 
 Remote: `https://github.com/LikeDotAudio/APK.softapp.DATATYPE.wireless.SOUNDbase.git` (no workflow of its own).
 
-**Tested:** only that it compiles (`cargo check --bins --lib` in MANAGEMENT.DataMigration) and, by hand, the runner over `test_data/SB PDF.csv`. There are no unit tests. `.apk.scripts/smoke.py` checks only that HEAD is pushed ([SMOKE](../%F0%9F%A7%A9Manual%20and%20Artifacts/SMOKE.md)).
+**Tested:** `cargo test --bin test_soundbase_importer` in MANAGEMENT.DataMigration runs the parser's 4 unit tests (header mapping, range guard, missing frequency column, the fixture); `cargo run --bin test_soundbase_importer` prints the fixture's 20 channels. `.apk.scripts/smoke.py` checks only that HEAD is pushed ([SMOKE](../%F0%9F%A7%A9Manual%20and%20Artifacts/SMOKE.md)).
 
-**Not automated:** no tests exist to run, and no CI; the Node-BareMetal rebuild is by hand; `cargo run --bin test_soundbase_importer` publishes retained to the live broker.
+**Not automated:** no CI runs the tests; the Node-BareMetal rebuild is by hand.
