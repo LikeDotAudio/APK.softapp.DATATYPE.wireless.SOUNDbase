@@ -32,7 +32,7 @@ The parser is source compiled by somebody else; `SRC/` is the worker crate that 
 - `parse_soundbase_report(path)` reads the file; `parse_soundbase_report_str(text, name)` parses text already in hand. Both go through `classify_soundbase_str`, which has no side effect.
 - The CSV's header row is read **by name** (case-insensitive: `Group`, `Model`, `Band`, `Name`, `Preset`, `Spacing`, `Frequency` — also `Freq`, `MHz`), so reordered or extra columns map right. A header with no frequency column is an error; any other missing column leaves that field empty.
 - A row whose frequency does not parse, or falls outside 100–3000 MHz (the sibling importers' guard), is skipped and counted in `skipped_rows`; a blank line is not counted.
-- The result (`SoundbaseParseResult`: `status` — `success`, or `empty` when no channel was read — `source_format` = `Soundbase_CSV_Report`, `file_path`, `mqtt_topic`, `total_channels`, `skipped_rows`, `channels[]`) is returned. The `wireless_soundbase` worker (`SRC/src/lib.rs`) wraps it as `{job_id, ok, result, error}` and answers, not retained, on `APK.audio/System/Protocols/wireless_soundbase/incoming/result`.
+- The result (`SoundbaseParseResult`: `status` — `success`, or `empty` when no channel was read — `source_format` = `Soundbase_CSV_Report`, `file_path`, `total_channels`, `skipped_rows`, `channels[]`) is returned. The `wireless_soundbase` worker (`SRC/src/lib.rs`) wraps it as `{job_id, ok, result, error}` and answers, not retained, on `APK.audio/System/Protocols/wireless_soundbase/incoming/result`.
 - Each channel record: `group`, `model`, `band`, `name`, `preset`, `spacing`, `frequency_mhz`. The GUI frame's table shows six of them (`name`, `group`, `model`, `band`, `frequency_mhz`, `spacing`).
 
 ---
@@ -72,7 +72,6 @@ cargo test --bin test_soundbase_importer   # the parser's 4 unit tests
 ## 🧭 Philosophy
 
 - **One record out, whatever came in.** Four foreign formats feed the Data Migration tab; each importer emits the fields its GUI frame declares as headers (the rule in the `MANAGEMENT.DataMigration/mod.rs` header). Here: `SoundbaseChannel` against `Soundbase_Importer.json`.
-- **Topics come from the contract.** `soundbase_mqtt_topic()` builds the topic with `apkaudio_contracts::topics::data_migration` rather than a literal.
 - **Parse, then let the daemon publish.** The parser returns; the data-migration daemon publishes retained on its own broker, and the bus holds the latest import for any tab that opens later. Nothing is stored in this repo.
 - **The PDF is the source, the CSV is what is parsed.** Soundbase's PDF is kept beside its CSV in `test_data/`; PDF reading belongs to `DATATYPE.wireless.PDF`, not here.
 

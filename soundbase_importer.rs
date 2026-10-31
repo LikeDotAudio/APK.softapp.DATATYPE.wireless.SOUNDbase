@@ -10,7 +10,6 @@ use csv::ReaderBuilder;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
-use apkaudio_contracts::topics;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SoundbaseChannel {
@@ -28,19 +27,10 @@ pub struct SoundbaseParseResult {
     pub status: String,
     pub source_format: String,
     pub file_path: String,
-    pub mqtt_topic: String,
     pub total_channels: usize,
     /// Rows the export carried that could not be read as a channel.
     pub skipped_rows: usize,
     pub channels: Vec<SoundbaseChannel>,
-}
-
-/// `APK.audio/System/DataMigration/Soundbase/ImportedData`, built from the contract
-/// rather than typed out — see `contracts/rust/src/topics.rs`, whose own header
-/// names the DataMigration importers as the literals it exists to replace.
-pub fn soundbase_mqtt_topic() -> String {
-    topics::data_migration("Soundbase", "ImportedData")
-        .expect("Soundbase/ImportedData are literal segments the contract accepts")
 }
 
 /// Parses a Soundbase report / PDF CSV export into structured data. No side effect.
@@ -137,7 +127,6 @@ pub fn classify_soundbase_str(file_content: &str, source_name: &str) -> Result<S
         status: status_for(channels.len()),
         source_format: "Soundbase_CSV_Report".to_string(),
         file_path: source_name.to_string(),
-        mqtt_topic: soundbase_mqtt_topic(),
         total_channels: channels.len(),
         skipped_rows,
         channels,

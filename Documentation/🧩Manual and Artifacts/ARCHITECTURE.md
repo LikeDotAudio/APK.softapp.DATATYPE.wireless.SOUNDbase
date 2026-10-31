@@ -18,7 +18,7 @@ Export the Soundbase frequency report as CSV, then pick it in the Data Migration
                           worker answers {job_id, ok, result, error}, not retained → …/wireless_soundbase/incoming/result
 ```
 
-`SoundbaseParseResult { status ("success" | "empty"), source_format: "Soundbase_CSV_Report", file_path, mqtt_topic, total_channels, skipped_rows, channels }`. A header with no frequency column is an `Err`.
+`SoundbaseParseResult { status ("success" | "empty"), source_format: "Soundbase_CSV_Report", file_path, total_channels, skipped_rows, channels }`. A header with no frequency column is an `Err`.
 
 ## Files
 
