@@ -50,7 +50,7 @@ pub fn parse_soundbase_report_str(file_content: &str, source_name: &str) -> Resu
 /// A usable wireless frequency, in MHz — the guard the IAS, WWB and CSV importers
 /// keep. A value outside it is a spacing, a channel number or a typo, not a carrier.
 fn usable_mhz(text: &str) -> Option<f64> {
-    text.trim().parse::<f64>().ok().filter(|f| *f > 100.0 && *f < 3000.0)
+    apkaudio_wireless_kernel::usable_mhz_text(text)
 }
 
 /// Where each field sits in this export, read from its header row by name, so a
@@ -133,10 +133,9 @@ pub fn classify_soundbase_str(file_content: &str, source_name: &str) -> Result<S
     })
 }
 
-/// "success" only when the report yielded channels; a parse that found none is
-/// "empty", never a success the panel would draw as an imported, blank table.
+/// "success" only when the report yielded channels — the kernel's one rule.
 fn status_for(channels: usize) -> String {
-    if channels > 0 { "success" } else { "empty" }.to_string()
+    apkaudio_wireless_kernel::import_status(channels)
 }
 
 #[cfg(test)]
@@ -148,7 +147,7 @@ mod tests {
         let csv = "Group,Model,Band,Name,Preset,Spacing,Frequency\nA,UR4D,G50,Vox,1,25,not-a-number\n,,,,,,\n";
         let r = parse_soundbase_report_str(csv, "x").unwrap();
         assert_eq!((r.status.as_str(), r.total_channels, r.skipped_rows), ("empty", 0, 1));
-        let ok = parse_soundbase_report_str(include_str!("test_data/SB PDF.csv"), "SB PDF.csv").unwrap();
+        let ok = parse_soundbase_report_str(include_str!("../../../test_data/SB PDF.csv"), "SB PDF.csv").unwrap();
         assert!(ok.total_channels > 0);
         assert_eq!(ok.status, "success");
         assert_eq!((ok.channels[0].band.as_str(), ok.channels[0].frequency_mhz), ("G57 - Narrowband", 566.6));

@@ -19,15 +19,15 @@ The parser is source compiled by somebody else; `SRC/` is the worker crate that 
 
 | File | What it is | Built by |
 | :-- | :-- | :-- |
-| `soundbase_importer.rs` | The CSV parser (pure; it publishes nothing) | `#[path]` module `soundbase_importer` of the `apkaudio-data-migration` crate (`Softapps/MANAGEMENT_AND_UTILITIES/MANAGEMENT.DataMigration/mod.rs`), which `oaRustCore` re-exports as `data_migration` |
-| `test_soundbase_importer.rs` | A standalone runner over the fixture | `[[bin]] test_soundbase_importer` in that crate's `Cargo.toml` |
+| `SRC/importer/` | The parser crate `apkaudio-wireless-soundbase` (pure; it publishes nothing) and `tests/fixtures.rs` | linked by the worker by path, and by MANAGEMENT.DataMigration by git rev (re-exported as `soundbase_importer`; `oaRustCore` re-exports that crate as `data_migration`) |
+| `SRC/check.sh` | Every check here in one command | `cargo test --workspace --locked` in `SRC/`, plus pytest for the Python edge |
 | `test_data/SB PDF.pdf` | A Soundbase PDF report (20 frequencies) | — kept as the source of the CSV; nothing here reads PDF |
 | `test_data/SB PDF.csv` | The same report as CSV: `Group,Model,Band,Name,Preset,Spacing,Frequency` | the runner |
 | `display.json` | Launcher manifest (category `DATATYPE`) | the OS app tree (`OS/system/project-apps.json`) |
-| `SRC/` | The worker crate `apk-worker-wireless-soundbase`: `soundbase_importer.rs` (by `#[path]`) behind a job loop on `apk-plugin-runner`, with its `config.ini` (section `[wireless_soundbase]`) | `cargo test --manifest-path SRC/Cargo.toml`; the image `worker-wireless-soundbase:local` |
+| `SRC/` | The worker crate `apk-worker-wireless-soundbase`: the parser crate `importer/` behind the runner's job loop (`apk_plugin_runner::jobs::JobWorker`) and the wireless kernel's job envelope, with its `config.ini` (section `[wireless_soundbase]`) | `bash SRC/check.sh`; the image `worker-wireless-soundbase:local` |
 | `Docker/` | The worker stack: container `Worker-WIRELESS_SOUNDBASE`, project `workers`, no port | included by `PODS/POD.workers/Docker/docker-compose.yml` |
 
-### What the parser does (`soundbase_importer.rs`)
+### What the parser does (`SRC/importer/src/lib.rs`)
 
 - `parse_soundbase_report(path)` reads the file; `parse_soundbase_report_str(text, name)` parses text already in hand. Both go through `classify_soundbase_str`, which has no side effect.
 - The CSV's header row is read **by name** (case-insensitive: `Group`, `Model`, `Band`, `Name`, `Preset`, `Spacing`, `Frequency` — also `Freq`, `MHz`), so reordered or extra columns map right. A header with no frequency column is an error; any other missing column leaves that field empty.
@@ -42,14 +42,14 @@ The parser is source compiled by somebody else; `SRC/` is the worker crate that 
 The same parser answers jobs on the bus (LOOSE-workers-convert-rest). A client subscribes to
 `APK.audio/System/Protocols/wireless_soundbase/incoming/result`, then publishes
 `{"job_id": "<yours>", "filename": "SB PDF.csv", ...}` to `APK.audio/System/Protocols/wireless_soundbase/outgoing/job`
-with the file as "text". The answer carries the same `job_id`, `ok`, and the parse result of
+with the file as "text". The answer carries `schema: 1`, the same `job_id`, `ok`, and the parse result of
 `classify_soundbase_str` under `result`; a malformed job or one over `max_job_bytes` (8 MiB, `SRC/config.ini`) comes
 back `ok: false` with an `error`. Nothing is retained and the worker opens no port. Measured
 2026-10-30: the fixture `test_data/SB PDF.csv` sent as a job came back `ok: true` with 20 channels.
 
 ```bash
 docker compose -f PODS/POD.workers/Docker/docker-compose.yml up -d --build wireless-soundbase
-cargo test --manifest-path SRC/Cargo.toml        # handle_job on the fixture, the self test
+bash SRC/check.sh                                # handle_job on the fixture, the self test, the shape test
 ```
 
 ## 🚀 Usage & Integration
@@ -57,15 +57,19 @@ cargo test --manifest-path SRC/Cargo.toml        # handle_job on the fixture, th
 * **Who calls the parser**: the `wireless_soundbase` worker, on each job the frame posts. (The orchestrator's DataMigration inbox that used to call it is retired: LOOSE-datamigration-frames-to-workers.)
 * **Remote Repository**: https://github.com/LikeDotAudio/APK.softapp.DATATYPE.wireless.SOUNDbase
 
-### Build and check
+### Build and test
 
 ```bash
-cd PODS/POD.THIN/Softapps/MANAGEMENT_AND_UTILITIES/MANAGEMENT.DataMigration
-cargo check --bins --lib          # compiles this parser and test_soundbase_importer
-cargo test --bin test_soundbase_importer   # the parser's 4 unit tests
+bash SRC/check.sh                       # everything below, --locked
+cd SRC && cargo test --workspace        # worker (8), parser crate (4 + fixture 1)
 ```
 
-`cargo run --bin test_soundbase_importer` parses the fixture and prints it (20 channels); it publishes nothing. It reads the fixture from `../../DATATYPE/DATATYPE.wireless.SOUNDbase/test_data/SB PDF.csv` (until 2026-10-30 it looked under the DataMigration crate, where the crate move left nothing, and exited 1).
+The parser is the crate `apkaudio-wireless-soundbase` (`SRC/importer/`). The worker links it by path;
+MANAGEMENT.DataMigration (and through it oaRustCore) links it by git rev — nobody compiles the
+file by `#[path]` any more. `SRC/importer/tests/fixtures.rs` parses `test_data/SB PDF.csv` from
+its path (20 channels); it was the `test_soundbase_importer` `[[bin]]` DataMigration built from this
+repository's file until the 2026-10-30 audit. The 100–3000 MHz guard and the status word are the
+wireless kernel's (`apkaudio-wireless-kernel`, DATATYPE.wireless.CSV/SRC/kernel, by git rev).
 
 ---
 

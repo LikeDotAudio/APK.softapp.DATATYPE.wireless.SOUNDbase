@@ -1,8 +1,16 @@
 {
   "name": "Datatype Wireless Soundbase",
   "category": "DATATYPE",
-  "icon": "\ud83d\udcd1",
-  "description": "Data Format Importers & Parsers component for APK.audio ecosystem.",
-  "entry": "soundbase_importer.rs",
-  "tech": "rust"
+  "icon": "📑",
+  "description": "Soundbase CSV report importer: reads the export's header-mapped columns into channel records and answers each job posted to APK.audio/System/Protocols/wireless_soundbase/outgoing/job on .../wireless_soundbase/incoming/result.",
+  "entry": "SRC/importer/src/lib.rs",
+  "tech": "rust",
+  "requires": {
+    "plugins": [
+      "wireless_soundbase"
+    ],
+    "services": [
+      "broker"
+    ]
+  }
 }
