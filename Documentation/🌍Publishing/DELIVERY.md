@@ -26,4 +26,4 @@ Remote: `https://github.com/LikeDotAudio/APK.softapp.DATATYPE.wireless.SOUNDbase
 - **Shared 100–3000 MHz rule** — the importer asks `apkaudio_wireless_kernel::usable_mhz…` and `import_status`; the three re-typed copies (IAS, SOUNDbase, WWB) and CSV's two are gone.
 - **Versioned result + shape test** — answers carry `schema: 1`; `the_result_shape_is_pinned` holds the result and channel keys.
 - **One local check** — `SRC/check.sh` (`cargo test --workspace --locked`); the root CI verifies nothing on purpose.
-
+- **Health probe from the runner, not its source file** — `SRC/src/bin/apk-plugin-health.rs` is one line over `apk_plugin_runner::health_check()` (W02 foundation); the `[[bin]]` that compiled DISCOVERY.Engine's `RUNNER/src/bin/apk-plugin-health.rs` by path is gone. Verified by `bash SRC/check.sh` and `docker build`.
