@@ -11,7 +11,7 @@ It owns the Soundbase CSV frequency-report parser (`soundbase_importer.rs`, pure
 | Talks to | How (topic / endpoint / file / import) | Relationship |
 |---|---|---|
 | Any job client (the Data Migration frame) | sub `APK.audio/System/Protocols/wireless_soundbase/outgoing/job`, pub `…/incoming/result` (`schema: 1`) | Published Language (job envelope, versioned) |
-| APK.plugin.SDK (`apk-plugin-runner`, `apkaudio-contracts`) | Cargo `tag = "sdk-v0.7"`, pinned in Cargo.lock; job loop `apk_plugin_runner::jobs::JobWorker` | Conformist, by version |
+| APK.plugin.SDK (`apk-plugin-runner`, `apkaudio-contracts`) | Cargo `tag = "sdk-v0.9"`, pinned in Cargo.lock; job loop `apk_plugin_runner::jobs::JobWorker` | Conformist, by version |
 | DATATYPE.wireless.CSV `SRC/kernel` (`apkaudio-wireless-kernel`) | Cargo git rev (band rule, status word, job envelope) | Shared kernel, one-way |
 | MANAGEMENT.DataMigration | depends on `SRC/importer` (`apkaudio-wireless-soundbase`) by git rev | Supplier (crate) |
 | POD.workers aggregator | `include:`s `Docker/docker-compose.yml`; project `workers` | Pod aggregator (house pattern) |
