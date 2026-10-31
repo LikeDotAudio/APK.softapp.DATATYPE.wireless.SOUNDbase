@@ -3,8 +3,8 @@
 //! Standalone Soundbase Importer module written in Rust.
 //! Parses Soundbase PDF exports / CSV data (e.g., SB PDF.csv),
 //! maps Group, Model, Band, Name, Preset, Spacing, Frequency fields,
-//! and returns them. It does not publish: the data-migration daemon publishes the
-//! result on the broker it was started with (LOOSE-datatype-datatype-wireless).
+//! and returns them. It does not publish: the wireless_soundbase worker (`SRC/src/lib.rs`)
+//! answers each job with the result (LOOSE-datatype-datatype-wireless, LOOSE-datamigration-frames-to-workers).
 
 use csv::ReaderBuilder;
 use serde::{Deserialize, Serialize};

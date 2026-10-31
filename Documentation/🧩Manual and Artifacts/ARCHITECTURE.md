@@ -4,18 +4,18 @@
 
 ## Using it
 
-Export the Soundbase frequency report as CSV, then pick it in the Data Migration tab's *Soundbase* frame (`WEB.Frontend-Assets/SRC/FrontEnd/Gui_Frames/3_Data_Migration/2_Soundbase/Soundbase_Importer.json`). The frame publishes it on `APK.audio/System/DataMigration/Soundbase/FilePath` (a disk path, `raw_content`, or base64 `raw_blob`) and draws the table from `…/Soundbase/ImportedData`.
+Export the Soundbase frequency report as CSV, then pick it in the Data Migration tab's *Soundbase* frame (`WEB.Frontend-Assets/SRC/FrontEnd/Gui_Frames/3_Data_Migration/2_Soundbase/Soundbase_Importer.json`). The browser reads it and posts it as a job, `{job_id, filename, text}`, not retained, to `APK.audio/System/Protocols/wireless_soundbase/outgoing/job`; the table draws the worker's answer on `…/wireless_soundbase/incoming/result`. No host path is ever sent.
 
 ## How it works
 
 ```text
-…/Soundbase/FilePath ─▶ NODE.BareMetal data-migration daemon (ORCHESTRATOR:hunter:VISA/src/services/data_migration.rs)
-                          └─▶ oaRustCore::data_migration::soundbase_importer::parse_soundbase_report[_str]
+…/wireless_soundbase/outgoing/job ─▶ Worker-WIRELESS_SOUNDBASE (SRC/src/lib.rs handle_job)
+                          └─▶ soundbase_importer, on the job's text / content_b64
                                 └─▶ classify_soundbase_str (pure)
                                       header row read by name: group model band name preset spacing frequency
                                       → SoundbaseChannel; a frequency that does not parse or is outside
                                         100–3000 MHz is skipped and counted
-                          daemon publishes retained → APK.audio/System/DataMigration/Soundbase/ImportedData
+                          worker answers {job_id, ok, result, error}, not retained → …/wireless_soundbase/incoming/result
 ```
 
 `SoundbaseParseResult { status ("success" | "empty"), source_format: "Soundbase_CSV_Report", file_path, mqtt_topic, total_channels, skipped_rows, channels }`. A header with no frequency column is an `Err`.

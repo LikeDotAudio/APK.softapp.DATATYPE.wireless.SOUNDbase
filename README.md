@@ -32,7 +32,7 @@ The parser is source compiled by somebody else; `SRC/` is the worker crate that 
 - `parse_soundbase_report(path)` reads the file; `parse_soundbase_report_str(text, name)` parses text already in hand. Both go through `classify_soundbase_str`, which has no side effect.
 - The CSV's header row is read **by name** (case-insensitive: `Group`, `Model`, `Band`, `Name`, `Preset`, `Spacing`, `Frequency` — also `Freq`, `MHz`), so reordered or extra columns map right. A header with no frequency column is an error; any other missing column leaves that field empty.
 - A row whose frequency does not parse, or falls outside 100–3000 MHz (the sibling importers' guard), is skipped and counted in `skipped_rows`; a blank line is not counted.
-- The result (`SoundbaseParseResult`: `status` — `success`, or `empty` when no channel was read — `source_format` = `Soundbase_CSV_Report`, `file_path`, `mqtt_topic`, `total_channels`, `skipped_rows`, `channels[]`) is returned. The data-migration daemon publishes it on its own broker to `APK.audio/System/DataMigration/Soundbase/ImportedData`, built by `apkaudio_contracts::topics::data_migration("Soundbase", "ImportedData")`.
+- The result (`SoundbaseParseResult`: `status` — `success`, or `empty` when no channel was read — `source_format` = `Soundbase_CSV_Report`, `file_path`, `mqtt_topic`, `total_channels`, `skipped_rows`, `channels[]`) is returned. The `wireless_soundbase` worker (`SRC/src/lib.rs`) wraps it as `{job_id, ok, result, error}` and answers, not retained, on `APK.audio/System/Protocols/wireless_soundbase/incoming/result`.
 - Each channel record: `group`, `model`, `band`, `name`, `preset`, `spacing`, `frequency_mhz`. The GUI frame's table shows six of them (`name`, `group`, `model`, `band`, `frequency_mhz`, `spacing`).
 
 ---
@@ -53,8 +53,8 @@ cargo test --manifest-path SRC/Cargo.toml        # handle_job on the fixture, th
 ```
 
 ## 🚀 Usage & Integration
-* **Web Portal Entry**: Data Migration → *Soundbase* (GUI frame `WEB.Frontend-Assets/SRC/FrontEnd/Gui_Frames/3_Data_Migration/2_Soundbase/Soundbase_Importer.json`). The frame publishes the chosen file on `APK.audio/System/DataMigration/Soundbase/FilePath` and draws the table from `.../Soundbase/ImportedData`.
-* **Who calls the parser**: the Data Migration daemon in the orchestrator (`NODE.BareMetal/SRC/Core/ORCHESTRATOR:hunter:VISA/src/services/data_migration.rs`, started from `main.rs`) subscribes `APK.audio/System/DataMigration/+/FilePath`. On a `/Soundbase/` topic a JSON payload with `raw_content` (or base64 `raw_blob`) goes to `parse_soundbase_report_str`; anything else is taken as a path on disk.
+* **Web Portal Entry**: Data Migration → *Soundbase* (GUI frame `WEB.Frontend-Assets/SRC/FrontEnd/Gui_Frames/3_Data_Migration/2_Soundbase/Soundbase_Importer.json`). The frame posts the chosen file's text as a job to `APK.audio/System/Protocols/wireless_soundbase/outgoing/job` and draws the table from `.../wireless_soundbase/incoming/result`.
+* **Who calls the parser**: the `wireless_soundbase` worker, on each job the frame posts. (The orchestrator's DataMigration inbox that used to call it is retired: LOOSE-datamigration-frames-to-workers.)
 * **Remote Repository**: https://github.com/LikeDotAudio/APK.softapp.DATATYPE.wireless.SOUNDbase
 
 ### Build and check
