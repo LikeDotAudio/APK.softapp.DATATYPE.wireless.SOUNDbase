@@ -52,6 +52,25 @@ docker compose -f PODS/POD.workers/Docker/docker-compose.yml up -d --build wirel
 bash SRC/check.sh                                # handle_job on the fixture, the self test, the shape test
 ```
 
+### Its carriers on the bus (ROAD-3519)
+
+Every carrier an imported file names is also said as a `Device/` row, with PLUGIN.WIFI's leaf
+names, so EDITORS.WirelessBuddy's Discovered panel lists it beside the Wi-Fi radios:
+
+```text
+APK.audio/System/Protocols/wireless_soundbase/Device/<id>/{name, device_class, frequency_mhz, channel, band,
+    model, manufacturer, device, zone, group, source_file}     unkept, again every restate_s (30 s)
+APK.audio/Discovery/wireless_soundbase/<deviceId>                           presence, the runner's (presence::seen)
+```
+
+`device_class` is `Wireless Transmitter` (the transmitter on that frequency); a field the file
+does not carry is `-`. Identity is never an address: one row is one carrier. A SOUNDbase export carries no serial, so the id is formed from `source file | group | model | band | name`; `channel` is the row name, `band` and `model` the export's own. That text, numbered `#n` where it
+repeats, is hashed — `deviceId = wireless_soundbase:plan:<fnv1a64>`, `<id>` = the same as one topic segment
+(`wireless_soundbase_plan_<hex>`) — so the same file imported again lands on the same ids. A file's carriers
+last until the same file name is imported again (dropped carriers are said gone at once) or the
+worker restarts; presence then says them offline after `presence_inactive_after_s` (90 s). Code:
+`SRC/src/carriers.rs`, `carriers_of` in `SRC/src/lib.rs`. Measured 2026-11-04 on the bench: `test_data/SB PDF.csv` sent as a job put 20 carriers under `wireless_soundbase/Device/` (20 `frequency_mhz` leaves) and 20 online presence documents.
+
 ## 🚀 Usage & Integration
 * **Web Portal Entry**: Data Migration → *Soundbase* (GUI frame `WEB.Frontend-Assets/SRC/FrontEnd/Gui_Frames/3_Data_Migration/2_Soundbase/Soundbase_Importer.json`). The frame posts the chosen file's text as a job to `APK.audio/System/Protocols/wireless_soundbase/outgoing/job` and draws the table from `.../wireless_soundbase/incoming/result`.
 * **Who calls the parser**: the `wireless_soundbase` worker, on each job the frame posts. (The orchestrator's DataMigration inbox that used to call it is retired: LOOSE-datamigration-frames-to-workers.)

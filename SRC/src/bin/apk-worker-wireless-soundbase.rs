@@ -5,4 +5,4 @@
 //! `manifest = "agent.toml"` (ROAD-3472): the manifest is compiled in, and the
 //! runner serves `GET /status` / `GET /telemetry` on 127.0.0.1:8227 — `running`
 //! until the first job is taken, `serving` after.
-apk_plugin_runner::main!(kind = "worker", token = "wireless_soundbase", lib = apk_worker_wireless_soundbase, run = [run_job_agent], manifest = "agent.toml");
+apk_plugin_runner::main!(kind = "worker", token = "wireless_soundbase", lib = apk_worker_wireless_soundbase, run = [run_job_agent, run_device_agent], manifest = "agent.toml");
