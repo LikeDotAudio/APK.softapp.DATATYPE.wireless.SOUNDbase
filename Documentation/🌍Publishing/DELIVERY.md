@@ -36,5 +36,11 @@ Remote: `https://github.com/LikeDotAudio/APK.softapp.DATATYPE.wireless.SOUNDbase
 - **One SDK copy in the lock** — the wireless kernel is pinned at DATATYPE.wireless.CSV `646e960` (kernel on `sdk-v0.7`) in `SRC/Cargo.toml` and `SRC/importer/Cargo.toml`, so `SRC/Cargo.lock` carries a single `apk-plugin-runner` / `apkaudio-contracts` (sdk-v0.7) instead of v0.6 beside v0.7. Verified by `cargo test --workspace --locked`.
 - **SDK `sdk-v0.9`, kernel `6af4baa`; worker 0.3.0, importer 0.2.0** (PLAN-3432.01) — runner and contracts at `tag = "sdk-v0.9"`, the wireless kernel at DATATYPE.wireless.CSV `6af4baa` (kernel 0.2.0, on `sdk-v0.9`) in `SRC/Cargo.toml` and `SRC/importer/Cargo.toml`; `SRC/Cargo.lock` re-resolved minimally against GitHub, one `apkaudio-contracts`. DATATYPE.wireless.PDF pins this commit by full `rev`. Verified 2026-10-31: the tree alone (`git archive`, no `.cargo` patch), `cargo test --workspace --locked` — worker 8, parser 4, fixture 1 pass.
 
+## Delivered 2026-11-11 – 2026-11-12
+
+From this repository's own commits (the commit message is the record):
+
+- pin sdk-v2.4 and the providers re-released on it (ROAD-3731: contracts 2.4.0 published) (`2edbf97`)
+
 ## Releases
 - **Released `2.0.0`, tag `v2.0.0`** (2026-11-01, ROAD-3452, the owner's V2) — on `sdk-v2.0` (contracts 2.0.0); every manifest says 2.0.0; GitHub release `v2.0.0`.
